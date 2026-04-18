@@ -81,6 +81,7 @@
   .toast { position: fixed; top: 60px; left: 50%; transform: translateX(-50%); background: var(--green); color: #0d1117; padding: 10px 20px; border-radius: 20px; font-size: 13px; font-weight: 600; z-index: 999; opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; }
   .toast.show { opacity: 1; }
   .btn-del-record { background: rgba(248,113,102,0.1); border: 1px solid rgba(248,113,102,0.2); color: var(--orange); border-radius: 8px; padding: 6px 14px; font-size: 12px; cursor: pointer; margin-top: 10px; display: inline-block; }
+  .btn-edit-record { background: rgba(88,166,255,0.1); border: 1px solid rgba(88,166,255,0.2); color: var(--accent); border-radius: 8px; padding: 6px 14px; font-size: 12px; cursor: pointer; margin-top: 10px; margin-right: 8px; display: inline-block; }
   .empty { text-align: center; color: var(--muted); padding: 40px 0; font-size: 14px; }
   .divider { height: 1px; background: var(--border); margin: 14px 0; }
   .section-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 10px; }
@@ -160,6 +161,7 @@ const typeMap = () => Object.fromEntries(allTypes().map(t=>[t.type,t]));
 
 let view="log", expandedId=null, newEx=[], addingEx=false;
 let addingType=false, selIcon="🏊", selColor="#58a6ff";
+let editingId=null, editEx=[], editAddingEx=false;
 
 const $ = id => document.getElementById(id);
 const fmtDate = d => { const dt=new Date(d+"T00:00:00"); return `${dt.getMonth()+1}月${dt.getDate()}日`; };
@@ -184,12 +186,54 @@ function renderLog(){
     const tags=r.exercises.map(e=>{const m=tm[e.type]||tm.other;return `<span class="tag" style="background:${m.color}20;color:${m.color};border:1px solid ${m.color}40">${m.icon} ${m.label}</span>`;}).join("");
     const open=expandedId===r.id;
     const rows=r.exercises.map(e=>{const m=tm[e.type]||tm.other;return `<div class="ex-row"><span style="font-size:15px">${m.icon}</span><span style="font-size:13px;color:#c9d1d9">${m.label}</span><span class="ex-val" style="color:${m.color}">${e.value} ${e.unit}</span></div>`;}).join("");
-    const body=open?`<div class="card-body"><div class="ex-list">${rows}</div>${r.note?`<div class="note-box">${r.note}</div>`:""}<button class="btn-del-record" onclick="delRecord(${r.id},event)">🗑 删除此记录</button></div>`:"";
+    const body=open?`<div class="card-body"><div class="ex-list">${rows}</div>${r.note?`<div class="note-box">${r.note}</div>`:""}<div style="margin-top:10px"><button class="btn-edit-record" onclick="editRecord(${r.id},event)">✏️ 编辑</button><button class="btn-del-record" onclick="delRecord(${r.id},event)">🗑 删除</button></div></div>`:"";
     return `<div class="card"><div class="card-header" onclick="toggleExp(${r.id})"><div class="card-left"><div class="date-block"><div class="date-main">${fmtDate(r.date)}</div><div class="date-sub">周${fmtWeek(r.date)}</div></div><div class="tags">${tags}</div></div><div class="chevron${open?" open":""}">▼</div></div>${body}</div>`;
   }).join("");
 }
 function toggleExp(id){expandedId=expandedId===id?null:id;render();}
 function delRecord(id,e){e.stopPropagation();if(!confirm("确定删除这条记录？"))return;records=records.filter(r=>r.id!==id);save(RKEY,records);expandedId=null;renderAll();toast("已删除");}
+function editRecord(id,e){
+  e.stopPropagation();
+  const r=records.find(r=>r.id===id); if(!r)return;
+  editingId=id;
+  editEx=[...r.exercises.map(ex=>({...ex}))];
+  editAddingEx=false;
+  switchView("edit");
+}
+
+function renderEdit(){
+  const r=records.find(r=>r.id===editingId); if(!r) return `<div class="empty">记录不存在</div>`;
+  const tm=typeMap();
+  const list=editEx.map((e,i)=>{const m=tm[e.type]||tm.other;return `<div class="ex-item-row" style="background:${m.color}15"><span>${m.icon} ${m.label}：<strong style="color:${m.color}">${e.value}</strong></span><button class="ex-item-del" onclick="rmEditEx(${i})">×</button></div>`;}).join("");
+  const opts=allTypes().map(t=>`<option value="${t.type}">${t.icon} ${t.label}</option>`).join("");
+  const form=editAddingEx?`<div style="margin-top:8px"><select class="form-select" id="editExType" style="margin-bottom:8px">${opts}</select><input class="form-input" id="editExVal" placeholder="数量，如 15×3 或 60s×2 或 10" style="margin-bottom:8px"><div class="btn-row"><button class="btn-confirm" onclick="confirmEditEx()">添加</button><button class="btn-cancel" onclick="cancelEditEx()">取消</button></div></div>`:`<button class="btn-add-ex" onclick="startEditEx()">＋ 添加运动项目</button>`;
+  return `<div style="padding:0 0 12px;display:flex;align-items:center;gap:8px">
+    <button onclick="switchView('log')" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:0">←</button>
+    <span style="font-size:15px;font-weight:700">编辑记录</span>
+  </div>
+  <div class="card" style="padding:16px">
+    <div class="form-section"><label class="form-label">日期</label><input type="date" class="form-input" id="editDate" value="${r.date}"></div>
+    <div class="form-section"><label class="form-label">运动项目</label>${list}${form}</div>
+    <div class="form-section"><label class="form-label">感受 / 备注</label><textarea class="form-textarea" id="editNote" placeholder="今天状态怎么样？">${r.note||""}</textarea></div>
+    <button class="btn-save" onclick="saveEdit()" ${editEx.length===0?"disabled":""}>💾 保存修改</button>
+  </div>`;
+}
+function startEditEx(){editAddingEx=true;render();}
+function cancelEditEx(){editAddingEx=false;render();}
+function confirmEditEx(){
+  const type=$("editExType")?.value, val=$("editExVal")?.value.trim();
+  if(!val){toast("请填写数量");return;}
+  const m=typeMap()[type]||typeMap().other;
+  editEx.push({type,label:m.label,value:val,unit:""});
+  editAddingEx=false;render();
+}
+function rmEditEx(i){editEx.splice(i,1);render();}
+function saveEdit(){
+  if(!editEx.length)return;
+  const date=$("editDate")?.value, note=$("editNote")?.value||"";
+  records=records.map(r=>r.id===editingId?{...r,date,exercises:[...editEx],note}:r);
+  save(RKEY,records); editingId=null; editEx=[]; renderAll(); toast("✅ 修改已保存！"); switchView("log");
+}
 
 function renderStats(){
   const byT=t=>records.filter(r=>r.exercises.some(e=>e.type===t)).sort((a,b)=>a.date.localeCompare(b.date));
@@ -278,11 +322,11 @@ function delType(i){
 function switchView(v){
   view=v;
   document.querySelectorAll(".nav-btn").forEach(b=>b.classList.remove("active"));
-  $("nav"+v.charAt(0).toUpperCase()+v.slice(1))?.classList.add("active");
+  if(v!=="edit") $("nav"+v.charAt(0).toUpperCase()+v.slice(1))?.classList.add("active");
   render();
 }
 function render(){
-  $("mainContent").innerHTML=view==="log"?renderLog():view==="stats"?renderStats():view==="add"?renderAdd():renderManage();
+  $("mainContent").innerHTML=view==="log"?renderLog():view==="stats"?renderStats():view==="add"?renderAdd():view==="edit"?renderEdit():renderManage();
 }
 function renderAll(){renderHeader();render();}
 renderAll();
