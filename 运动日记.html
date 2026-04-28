@@ -257,15 +257,24 @@ function renderStats(){
 
 function renderAdd(){
   const tm=typeMap();
+  const lastRec=[...records].sort((a,b)=>b.date.localeCompare(a.date))[0];
   const list=newEx.map((e,i)=>{const m=tm[e.type]||tm.other;return `<div class="ex-item-row" style="background:${m.color}15"><span>${m.icon} ${m.label}：<strong style="color:${m.color}">${e.value}</strong></span><button class="ex-item-del" onclick="rmEx(${i})">×</button></div>`;}).join("");
   const opts=allTypes().map(t=>`<option value="${t.type}">${t.icon} ${t.label}</option>`).join("");
   const form=addingEx?`<div style="margin-top:8px"><select class="form-select" id="exType" style="margin-bottom:8px">${opts}</select><input class="form-input" id="exVal" placeholder="数量，如 15×3 或 60s×2 或 10" style="margin-bottom:8px"><div class="btn-row"><button class="btn-confirm" onclick="confirmEx()">添加</button><button class="btn-cancel" onclick="cancelEx()">取消</button></div></div>`:`<button class="btn-add-ex" onclick="startEx()">＋ 添加运动项目</button>`;
+  const copyBtn=lastRec&&newEx.length===0?`<button onclick="copyLast()" style="width:100%;padding:10px;background:rgba(63,185,80,0.08);border:1px dashed rgba(63,185,80,0.35);border-radius:10px;color:#3fb950;font-size:13px;cursor:pointer;margin-bottom:8px">📋 复制上次记录（${fmtDate(lastRec.date)}）</button>`:"";
   return `<div class="card" style="padding:16px">
     <div class="form-section"><label class="form-label">日期</label><input type="date" class="form-input" id="newDate" value="${today()}"></div>
-    <div class="form-section"><label class="form-label">运动项目</label>${list}${form}</div>
+    <div class="form-section"><label class="form-label">运动项目</label>${copyBtn}${list}${form}</div>
     <div class="form-section"><label class="form-label">感受 / 备注</label><textarea class="form-textarea" id="newNote" placeholder="今天状态怎么样？有什么进步？"></textarea></div>
     <button class="btn-save" onclick="saveRec()" ${newEx.length===0?"disabled":""}>💾 保存今日记录</button>
   </div>`;
+}
+function copyLast(){
+  const lastRec=[...records].sort((a,b)=>b.date.localeCompare(a.date))[0];
+  if(!lastRec)return;
+  newEx=lastRec.exercises.map(e=>({...e}));
+  render();
+  toast("✅ 已复制上次记录，可直接修改");
 }
 function startEx(){addingEx=true;render();}
 function cancelEx(){addingEx=false;render();}
